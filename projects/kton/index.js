@@ -1,11 +1,15 @@
 const { call } = require('../helper/chain/ton');
 const ADDRESSES = require("../helper/coreAssets.json");
 const { BigNumber } = require('bignumber.js');
-// KTON Pool Contract Address
-const KTON_POOL_CONTRACT_ADDRESS = "EQA9HwEZD_tONfVz6lJS0PVKR5viEiEGyj9AuQewGQVnXPg0";
-async function getKtonData() {
+// Both pools are TON Core liquid staking pools with the same get_pool_full_data layout, and each mints
+// its own jetton: KTON for the public pool, PKTON for the institutional pool. Neither pool holds the other's jetton.
+const POOLS = [
+  "EQA9HwEZD_tONfVz6lJS0PVKR5viEiEGyj9AuQewGQVnXPg0", // KTON public pool
+  "EQDsW2P6nuP1zopKoNiCYj2xhqDan0cBuULQ8MH4o7dBt_7a", // PKTON institutional pool
+];
+async function getKtonData(poolAddress) {
   const stacks = await call({
-    target: KTON_POOL_CONTRACT_ADDRESS,
+    target: poolAddress,
     abi: 'get_pool_full_data',
     params: [],
     rawStack: true,
@@ -47,11 +51,13 @@ async function getKtonData() {
 
 module.exports = {
   timetravel: false,
-  methodology: 'KTON price is calculated by multiplying the KTON:TON ratio from the pool with the current TON price',
+  methodology: 'TVL is total_balance from get_pool_full_data, which is all TON accounted by the pool (held by the pool and lent to validator controllers), summed over the public KTON pool and the institutional PKTON pool',
   ton: {
     tvl: async (api) => {
-      const ktonData = await getKtonData();
-      return api.add(ADDRESSES.ton.TON, ktonData.tvl);
+      for (const pool of POOLS) {
+        const ktonData = await getKtonData(pool);
+        api.add(ADDRESSES.ton.TON, ktonData.tvl);
+      }
     },
   }
 };
